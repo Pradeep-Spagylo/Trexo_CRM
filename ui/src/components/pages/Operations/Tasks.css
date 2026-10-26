@@ -6160,3 +6160,33 @@
   color: #2563eb !important;
   border-bottom-color: #2563eb !important;
 }
+
+/* Project and Task Group Dropdowns matching Due / Delivery style */
+.saas-detail-field-select,
+.saas-project-select,
+.saas-taskgroup-select {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 4px !important;
+  background-color: #f8fafc !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  padding: 0.15rem 0.4rem !important;
+  cursor: pointer !important;
+  outline: none !important;
+  height: 24px !important;
+  line-height: 1.2 !important;
+  box-sizing: border-box !important;
+  transition: border-color 0.15s ease !important;
+}
+
+.saas-detail-field-select:hover,
+.saas-detail-field-select:focus,
+.saas-project-select:hover,
+.saas-project-select:focus,
+.saas-taskgroup-select:hover,
+.saas-taskgroup-select:focus {
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+

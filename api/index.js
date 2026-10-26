@@ -419,7 +419,14 @@ const notifyEmailsByNames = async (userIds, subject, message, type) => {
       }
     });
 
+    console.log(`[notifyEmailsByNames] Looking up recipient users for: [${names.join(', ')}]`);
     const frontendUrl = process.env.FRONTEND_URL || 'https://crm.spagylo.com';
+
+    if (users.length === 0) {
+      console.warn(`[notifyEmailsByNames] No matching users found in DB for identifiers: [${names.join(', ')}]`);
+    } else {
+      console.log(`[notifyEmailsByNames] Found ${users.length} recipient user(s):`, users.map(u => `${u.fullName || u.firstName || 'User'} <${u.email}>`).join(', '));
+    }
 
     for (const u of users) {
       if (u.email) {
@@ -436,6 +443,8 @@ const notifyEmailsByNames = async (userIds, subject, message, type) => {
           buttonLink: `${frontendUrl}${route}`
         };
         await sendNotificationEmail(u.email, subject, userContext, type);
+      } else {
+        console.warn(`[notifyEmailsByNames] User ${u.id} (${u.fullName}) has no email address configured in DB.`);
       }
     }
   } catch (err) {
@@ -498,13 +507,35 @@ const sanitizeTaskData = (taskData) => {
   Object.keys(taskData).forEach(key => {
     if (key in prisma.task.fields) {
       let val = taskData[key];
-      if ((key === 'clientId' || key === 'projectId' || key === 'taskListId' || key === 'parentId') && val === '') {
-        val = null;
+      if (key === 'clientId' || key === 'projectId' || key === 'taskListId' || key === 'parentId') {
+        if (!val || val === '' || val === 'null' || val === 'undefined' || val === 'unassigned' || val === 'unassigned_proj' || String(val).startsWith('gen_')) {
+          val = null;
+        }
       }
       sanitized[key] = val;
     }
   });
   return sanitized;
+};
+
+const validateTaskForeignKeys = async (taskData) => {
+  if (taskData.taskListId) {
+    const tlExists = await prisma.taskList.findUnique({ where: { id: taskData.taskListId }, select: { id: true } });
+    if (!tlExists) taskData.taskListId = null;
+  }
+  if (taskData.projectId) {
+    const pExists = await prisma.project.findUnique({ where: { id: taskData.projectId }, select: { id: true } });
+    if (!pExists) taskData.projectId = null;
+  }
+  if (taskData.clientId) {
+    const cExists = await prisma.client.findUnique({ where: { id: taskData.clientId }, select: { id: true } });
+    if (!cExists) taskData.clientId = null;
+  }
+  if (taskData.parentId) {
+    const ptExists = await prisma.task.findUnique({ where: { id: taskData.parentId }, select: { id: true } });
+    if (!ptExists) taskData.parentId = null;
+  }
+  return taskData;
 };
 
 const sanitizeLeaveData = (leaveData) => {
@@ -1591,10 +1622,36 @@ app.post('/api/teams', async (req, res) => {
   }
 });
 
+let lastRecurringCheck = 0;
+
+app.post('/api/tasks/check-recurring', async (req, res) => {
+  try {
+    await checkAndGenerateRecurringTasks();
+    res.json({ success: true, message: 'Recurring tasks checked and generated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/tasks/check-recurring', async (req, res) => {
+  try {
+    await checkAndGenerateRecurringTasks();
+    res.json({ success: true, message: 'Recurring tasks checked and generated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 7. Tasks
 app.get('/api/tasks', async (req, res) => {
   try {
     const now = Date.now();
+    // Run recurring task check periodically (throttled to once every 10 seconds)
+    if (now - lastRecurringCheck > 10000) {
+      lastRecurringCheck = now;
+      await checkAndGenerateRecurringTasks().catch(err => console.error('[Recurring Task Check Error]:', err));
+    }
+
     if (apiMemoryCache.tasks.data && (now - apiMemoryCache.tasks.time < apiMemoryCache.tasks.ttl)) {
       return res.json(apiMemoryCache.tasks.data);
     }
@@ -1785,6 +1842,8 @@ app.post('/api/tasks', async (req, res) => {
       taskData.taskNo = `${prefix}${maxNo + 1}`;
     }
 
+    taskData = await validateTaskForeignKeys(taskData);
+
     const task = await prisma.task.create({
       data: taskData,
       include: { projectRef: { select: { name: true } } }
@@ -1830,16 +1889,21 @@ app.post('/api/tasks', async (req, res) => {
       }
     } else if (task.assignees) {
       // For all other task types (regular, Calls/Meetings, Recurring Task):
-      // Exclude creator from notification if they self-assigned
-      const notifyAssigneeIds = isSelfAssigned
+      // In production, exclude creator from notification if they self-assigned.
+      // In development, allow notification even if self-assigned so that developers testing locally receive the email.
+      const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'DEV';
+      const notifyAssigneeIds = (isSelfAssigned && !isDev)
         ? assigneeIds.filter(id => id !== creatorId)
         : assigneeIds;
       const notifyAssignees = notifyAssigneeIds.join(',');
+
+      console.log(`[Task Assignment] Task "${task.title}" (ID: ${task.taskNo}) assignees: "${task.assignees}". isSelfAssigned: ${isSelfAssigned}, notifyAssignees: "${notifyAssignees}"`);
 
       if (notifyAssignees) {
         createNotification(notifyAssignees, `New Task Assigned: ${task.title}`, `You have been assigned to a new task.`);
         // Send email asynchronously in background so response isn't blocked
         getTaskDetailsForEmail(task).then(({ taskListName, projectName }) => {
+          console.log(`[Task Notification] Triggering email dispatch for assignees: "${notifyAssignees}"`);
           return notifyEmailsByNames(notifyAssignees, `New Task Assigned: ${task.title}`, {
             author: finalCreatedBy || createdByName || 'Admin',
             action: 'assigned you to',
@@ -1850,6 +1914,8 @@ app.post('/api/tasks', async (req, res) => {
             taskId: getTaskDisplayId(task)
           }, 'task');
         }).catch(notifErr => console.error('Error sending task assigned notifications:', notifErr));
+      } else {
+        console.log(`[Task Notification] Skipped email notification (no assignees to notify, self-assigned in production)`);
       }
     }
 
@@ -2001,6 +2067,7 @@ app.put('/api/tasks/:id', async (req, res) => {
 
     // Universal model field sanitizer to protect Prisma against drift
     taskData = sanitizeTaskData(taskData);
+    taskData = await validateTaskForeignKeys(taskData);
 
     const task = await prisma.task.update({
       where: { id: req.params.id },
@@ -2111,6 +2178,8 @@ app.put('/api/tasks/:id', async (req, res) => {
       const isReassignment = existingTask.assignees && existingTask.assignees.trim().length > 0;
       const notificationTitle = isReassignment ? `Task Reassigned: ${task.title}` : `Task Assigned: ${task.title}`;
       const notificationMsg = isReassignment ? `You have been reassigned to this task.` : `You have been assigned to this task.`;
+
+      console.log(`[Task Reassignment] Task "${task.title}" (ID: ${task.taskNo || task.id}) new assignees: "${addedAssigneesStr}"`);
 
       createNotification(addedAssigneesStr, notificationTitle, notificationMsg);
       // Send email asynchronously in background
@@ -3696,101 +3765,135 @@ const getInitialRecurrenceDate = (frequency, detail, baseDate) => {
   }
 };
 
-const checkAndGenerateRecurringTasks = async () => {
+const getLocalDateStr = (d, offsetHours = 5.5) => {
+  if (!d) return null;
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return null;
+  const localMs = date.getTime() + offsetHours * 60 * 60 * 1000;
+  return new Date(localMs).toISOString().split('T')[0];
+};
+
+async function checkAndGenerateRecurringTasks() {
   try {
     const now = new Date();
+    const todayDateStr = getLocalDateStr(now);
+    // Find candidate templates: nextOccurrence date on or before end of today
+    const endOfToday = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
     const templates = await prisma.task.findMany({
       where: {
         taskType: 'Recurring Task',
         recurrenceFrequency: { not: null },
-        nextOccurrence: { lte: now }
+        nextOccurrence: { lte: endOfToday }
       }
     });
 
+    let generatedAny = false;
+
+    // Fetch initial max task number once
+    const allTasks = await prisma.task.findMany({ select: { taskNo: true } });
+    let maxNo = 0;
+    for (const t of allTasks) {
+      if (t.taskNo) {
+        const digits = parseInt(t.taskNo.replace(/\D/g, ''), 10);
+        if (!isNaN(digits) && digits > maxNo && digits < 50000) {
+          maxNo = digits;
+        }
+      }
+    }
+
     for (const template of templates) {
-      const currentNext = new Date(template.nextOccurrence);
-      const nextDate = calculateNextRecurrence(template.recurrenceFrequency, template.recurrenceDetail, currentNext);
+      let currentNext = template.nextOccurrence ? new Date(template.nextOccurrence) : null;
+      if (!currentNext) continue;
 
-      await prisma.task.update({
-        where: { id: template.id },
-        data: {
-          lastOccurrence: currentNext,
-          nextOccurrence: nextDate
-        }
-      });
+      let loopCount = 0;
+      // Loop while this occurrence is on or before today's calendar date
+      while (currentNext && getLocalDateStr(currentNext) <= todayDateStr && loopCount < 10) {
+        loopCount++;
+        const nextDate = calculateNextRecurrence(template.recurrenceFrequency, template.recurrenceDetail, currentNext);
 
-      // 1. Process parameter placeholders in the title
-      let instanceTitle = template.title;
-      const dayStr = String(currentNext.getDate());
-      const yearStr = String(currentNext.getFullYear());
-      const monthAbbrev = currentNext.toLocaleString('default', { month: 'short' });
-      const monthFull = currentNext.toLocaleString('default', { month: 'long' });
-      const monthNum = String(currentNext.getMonth() + 1).padStart(2, '0');
-
-      instanceTitle = instanceTitle
-        .replace(/{day}/gi, dayStr)
-        .replace(/{date}/gi, dayStr)
-        .replace(/{dd}/gi, dayStr.padStart(2, '0'))
-        .replace(/{month}/g, monthAbbrev)
-        .replace(/{Month}/g, monthFull)
-        .replace(/{mmm}/gi, monthAbbrev)
-        .replace(/{MMMM}/g, monthFull)
-        .replace(/{month_num}/gi, monthNum)
-        .replace(/{mm}/gi, monthNum)
-        .replace(/{year}/gi, yearStr)
-        .replace(/{yyyy}/gi, yearStr)
-        .replace(/{YYYY}/gi, yearStr);
-
-      // Support user's example style like: Maintenance for {Aug} {2026}
-      const shortMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const longMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-      for (let i = 0; i < 12; i++) {
-        instanceTitle = instanceTitle
-          .replace(new RegExp(`{${shortMonths[i]}}`, 'gi'), monthAbbrev)
-          .replace(new RegExp(`{${longMonths[i]}}`, 'gi'), monthFull);
-      }
-      instanceTitle = instanceTitle.replace(/{\d{4}}/g, yearStr);
-
-      // 2. Sequential task number calculation
-      const allTasks = await prisma.task.findMany({ select: { taskNo: true } });
-      let maxNo = 0;
-      for (const t of allTasks) {
-        if (t.taskNo) {
-          const digits = parseInt(t.taskNo.replace(/\D/g, ''), 10);
-          if (!isNaN(digits) && digits > maxNo && digits < 50000) {
-            maxNo = digits;
+        await prisma.task.update({
+          where: { id: template.id },
+          data: {
+            lastOccurrence: currentNext,
+            nextOccurrence: nextDate
           }
+        });
+
+        // 1. Process parameter placeholders in the title
+        let instanceTitle = template.title;
+        const dayStr = String(currentNext.getDate());
+        const yearStr = String(currentNext.getFullYear());
+        const monthAbbrev = currentNext.toLocaleString('default', { month: 'short' });
+        const monthFull = currentNext.toLocaleString('default', { month: 'long' });
+        const monthNum = String(currentNext.getMonth() + 1).padStart(2, '0');
+
+        instanceTitle = instanceTitle
+          .replace(/{day}/gi, dayStr)
+          .replace(/{date}/gi, dayStr)
+          .replace(/{dd}/gi, dayStr.padStart(2, '0'))
+          .replace(/{month}/g, monthAbbrev)
+          .replace(/{Month}/g, monthFull)
+          .replace(/{mmm}/gi, monthAbbrev)
+          .replace(/{MMMM}/g, monthFull)
+          .replace(/{month_num}/gi, monthNum)
+          .replace(/{mm}/gi, monthNum)
+          .replace(/{year}/gi, yearStr)
+          .replace(/{yyyy}/gi, yearStr)
+          .replace(/{YYYY}/gi, yearStr);
+
+        // Support user's example style like: Maintenance for {Aug} {2026}
+        const shortMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const longMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        for (let i = 0; i < 12; i++) {
+          instanceTitle = instanceTitle
+            .replace(new RegExp(`{${shortMonths[i]}}`, 'gi'), monthAbbrev)
+            .replace(new RegExp(`{${longMonths[i]}}`, 'gi'), monthFull);
         }
+        instanceTitle = instanceTitle.replace(/{\d{4}}/g, yearStr);
+
+        // 2. Sequential task number calculation
+        maxNo += 1;
+        const taskNo = `T${maxNo}`;
+
+        // 3. Create the instance task
+        const newInstance = await prisma.task.create({
+          data: {
+            taskNo,
+            title: instanceTitle,
+            description: template.description,
+            taskType: 'Task', // Standard task type for the instance
+            projectId: template.projectId,
+            clientId: template.clientId,
+            assignees: template.assignees,
+            dueDate: currentNext,
+            status: 'To Do',
+            priority: template.priority,
+            tag: template.tag,
+            taskListId: template.taskListId,
+            createdBy: template.createdBy,
+            creatorId: template.creatorId,
+            recurringTemplateId: template.id
+          }
+        });
+
+        console.log(`[Recurring Task Scheduler] Generated instance task ${taskNo} (${newInstance.id}): "${instanceTitle}" from template ${template.id}`);
+        generatedAny = true;
+
+        // Advance currentNext to nextDate for next iteration if multiple occurrences were due
+        currentNext = nextDate ? new Date(nextDate) : null;
       }
-      const taskNo = `T${maxNo + 1}`;
+    }
 
-      // 3. Create the instance task
-      const newInstance = await prisma.task.create({
-        data: {
-          taskNo,
-          title: instanceTitle,
-          description: template.description,
-          taskType: 'Task', // Standard task type for the instance
-          projectId: template.projectId,
-          clientId: template.clientId,
-          assignees: template.assignees,
-          dueDate: currentNext,
-          status: 'To Do',
-          priority: template.priority,
-          tag: template.tag,
-          taskListId: template.taskListId,
-          createdBy: template.createdBy,
-          creatorId: template.creatorId,
-          recurringTemplateId: template.id
-        }
-      });
-
-      console.log(`[Recurring Task Scheduler] Generated instance task ${taskNo} (${newInstance.id}): "${instanceTitle}" from template ${template.id}`);
+    if (generatedAny && typeof clearApiCache === 'function') {
+      clearApiCache('tasks');
+      clearApiCache('projects');
+      clearApiCache('taskLists');
     }
   } catch (err) {
     console.error('[Recurring Task Scheduler] Error checking/generating recurring tasks:', err);
   }
-};
+}
 
 async function fixDuplicateTaskNumbers() {
   try {
