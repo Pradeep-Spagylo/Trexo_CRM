@@ -1,13 +1,11 @@
 require('dotenv').config();
 const AWS = require('aws-sdk');
 
-function getSesClient() {
-  return new AWS.SES({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION || 'ap-south-1',
-  });
-}
+const ses = new AWS.SES({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION || 'ap-south-1',
+});
 
 // Utility function to parse email addresses from environment variables
 function parseDevEmails(devEmailString) {
@@ -134,18 +132,13 @@ async function sendNotificationEmail(to, subject, context, type = 'notification'
     </div>
   `;
 
-  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
-    console.warn(`[Mailer Warning] AWS credentials missing in environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY). Email to ${to} skipped.`);
-    return;
-  }
+  console.log(`\n==========================================\n[DEVELOPMENT EMAIL] To: ${to} (${type})\n==========================================\n`);
 
   // Redirect recipient in development mode
   let recipients = Array.isArray(to) ? to : [to];
-  const isDev = process.env.NODE_ENV === 'DEV' || process.env.NODE_ENV === 'development';
-  if (isDev && process.env.SEND_REAL_EMAILS !== 'true') {
+  if ((process.env.NODE_ENV === 'DEV' || process.env.NODE_ENV === 'development') && process.env.SEND_REAL_EMAILS !== 'true') {
     const devEmails = getDevEmails();
     if (devEmails.length > 0) {
-      console.log(`[Mailer DEV Mode] SEND_REAL_EMAILS is not 'true'. Redirecting recipients [${recipients.join(', ')}] -> [${devEmails.join(', ')}]`);
       recipients = devEmails;
     }
   }
@@ -154,11 +147,9 @@ async function sendNotificationEmail(to, subject, context, type = 'notification'
   if (context && context.author) {
     const match = fromAddress.match(/<([^>]+)>/);
     const rawEmail = match ? match[1] : 'admin@spagylo.com';
-    const displayAuthor = context.author.replace(/["<>]/g, '');
+    const displayAuthor = context.author.replace(/"/g, '');
     fromAddress = `"${displayAuthor}" <${rawEmail}>`;
   }
-
-  console.log(`[Mailer] Dispatching email via SES: To: [${recipients.join(', ')}] | From: ${fromAddress} | Subject: "${subject}" (${type})`);
 
   const emailParams = {
     Destination: {
@@ -180,11 +171,10 @@ async function sendNotificationEmail(to, subject, context, type = 'notification'
   };
 
   try {
-    const ses = getSesClient();
     const data = await ses.sendEmail(emailParams).promise();
-    console.log(`[Mailer SUCCESS] Email sent successfully to ${recipients.join(', ')}. Message ID: ${data.MessageId}`);
+    console.log(`[Mailer] Email sent successfully to ${recipients.join(', ')}. Message ID: ${data.MessageId}`);
   } catch (mailErr) {
-    console.error(`[Mailer ERROR] Failed to send email via SES to ${recipients.join(', ')}: ${mailErr.message}`);
+    console.warn(`[Mailer Warning] Failed to send email via SES to ${recipients.join(', ')}: ${mailErr.message}`);
   }
 }
 
@@ -257,7 +247,6 @@ async function sendOtpEmail(to, otp) {
   };
 
   try {
-    const ses = getSesClient();
     const data = await ses.sendEmail(emailParams).promise();
     console.log(`[Mailer] OTP Email sent successfully to ${recipients.join(', ')}. Message ID: ${data.MessageId}`);
     return true;
