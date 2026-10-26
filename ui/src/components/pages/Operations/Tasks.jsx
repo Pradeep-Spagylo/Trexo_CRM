@@ -2901,10 +2901,11 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
               <div className="saas-meta-grid animate-fade-in" style={{ paddingBottom: '2rem' }}>
                 
                 {/* Row 1: Status & Project / Task Group Dropdowns on Right Side */}
+                {/* Row 1: Status & Project / Task Group Dropdowns on Right Side */}
                 {form.taskType !== 'calls/meetings' ? (
                   <div className="saas-meta-row saas-meta-row-2col" style={{ gap: '1rem', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <span className="saas-meta-label" style={{ color: '#64748b', fontSize: '12px', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><IconStatus /> Status</span>
-                    <span className="saas-meta-value" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', width: '100%', flexWrap: 'wrap' }}>
+                    <span className="saas-meta-label" style={{ color: '#64748b', fontSize: '12px', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flexShrink: 0 }}><IconStatus /> Status</span>
+                    <span className="saas-meta-value saas-status-project-group-row" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', width: '100%', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
                       <select 
                         value={form.status} 
                         onChange={e => { 
@@ -2918,22 +2919,22 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
                         }} 
                         disabled={!canEdit} 
                         className="saas-grid-select" 
-                        style={{ width: 'fit-content', padding: '0.4rem', border: '1px solid transparent', background: 'transparent', cursor: canEdit ? 'pointer' : 'default', color: '#64748b', fontSize: '12px', fontWeight: 400 }}
+                        style={{ width: 'fit-content', padding: '0.4rem', border: '1px solid transparent', background: 'transparent', cursor: canEdit ? 'pointer' : 'default', color: '#64748b', fontSize: '12px', fontWeight: 400, flexShrink: 0 }}
                       >
                         {STATUS_OPTIONS.map(col => <option key={col.id} value={col.id}>{col.label}</option>)}
                       </select>
 
                       {/* Project and Task Group matching Due -> Delivery UI */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1.75rem', flexWrap: 'wrap', marginLeft: '0.5rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400 }}>Project:</span>
+                      <div className="saas-project-group-container" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'nowrap', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        <div className="saas-project-field-item" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0 }}>Project:</span>
                           <select
                             value={resolvedProjectId}
                             onChange={handleProjectChange}
                             disabled={!canEdit}
-                            className="saas-detail-date-input saas-detail-field-select"
-                            style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedProjectId ? '#0f172a' : '#64748b', minWidth: '120px', maxWidth: '200px', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
-                            title="Project"
+                            className="saas-detail-date-input saas-detail-field-select saas-project-select"
+                            style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedProjectId ? '#0f172a' : '#64748b', minWidth: '100px', maxWidth: '180px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
+                            title={projects.find(p => p.id === resolvedProjectId)?.name || "Project"}
                           >
                             <option value="">Select Project...</option>
                             {projects.map(p => (
@@ -2942,15 +2943,15 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
                           </select>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400 }}>Task Group:</span>
+                        <div className="saas-taskgroup-field-item" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0 }}>Task Group:</span>
                           <select
                             value={resolvedTaskListId}
                             onChange={handleTaskGroupChange}
                             disabled={!canEdit}
-                            className="saas-detail-date-input saas-detail-field-select"
-                            style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedTaskListId ? '#0f172a' : '#64748b', minWidth: '130px', maxWidth: '220px', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
-                            title="Task Group"
+                            className="saas-detail-date-input saas-detail-field-select saas-taskgroup-select"
+                            style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedTaskListId ? '#0f172a' : '#64748b', minWidth: '110px', maxWidth: '200px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
+                            title={availableTaskLists.find(tl => tl.id === resolvedTaskListId)?.name || "Task Group"}
                           >
                             <option value="">Select Task Group...</option>
                             {availableTaskLists.map(tl => {
@@ -2968,17 +2969,17 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
                   </div>
                 ) : (
                   <div className="saas-meta-row saas-meta-row-2col" style={{ gap: '1rem', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <span className="saas-meta-label" style={{ color: '#64748b', fontSize: '12px', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><IconProject /> Project & Group</span>
-                    <span className="saas-meta-value" style={{ display: 'flex', alignItems: 'center', gap: '1.75rem', width: '100%', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400 }}>Project:</span>
+                    <span className="saas-meta-label" style={{ color: '#64748b', fontSize: '12px', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flexShrink: 0 }}><IconProject /> Project & Group</span>
+                    <span className="saas-meta-value saas-project-group-container" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', width: '100%', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
+                      <div className="saas-project-field-item" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0 }}>Project:</span>
                         <select
                           value={resolvedProjectId}
                           onChange={handleProjectChange}
                           disabled={!canEdit}
-                          className="saas-detail-date-input saas-detail-field-select"
-                          style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedProjectId ? '#0f172a' : '#64748b', minWidth: '120px', maxWidth: '200px', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
-                          title="Project"
+                          className="saas-detail-date-input saas-detail-field-select saas-project-select"
+                          style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedProjectId ? '#0f172a' : '#64748b', minWidth: '100px', maxWidth: '180px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
+                          title={projects.find(p => p.id === resolvedProjectId)?.name || "Project"}
                         >
                           <option value="">Select Project...</option>
                           {projects.map(p => (
@@ -2987,15 +2988,15 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
                         </select>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400 }}>Task Group:</span>
+                      <div className="saas-taskgroup-field-item" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0 }}>Task Group:</span>
                         <select
                           value={resolvedTaskListId}
                           onChange={handleTaskGroupChange}
                           disabled={!canEdit}
-                          className="saas-detail-date-input saas-detail-field-select"
-                          style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedTaskListId ? '#0f172a' : '#64748b', minWidth: '130px', maxWidth: '220px', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
-                          title="Task Group"
+                          className="saas-detail-date-input saas-detail-field-select saas-taskgroup-select"
+                          style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedTaskListId ? '#0f172a' : '#64748b', minWidth: '110px', maxWidth: '200px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
+                          title={availableTaskLists.find(tl => tl.id === resolvedTaskListId)?.name || "Task Group"}
                         >
                           <option value="">Select Task Group...</option>
                           {availableTaskLists.map(tl => {
