@@ -6190,3 +6190,47 @@
   color: #0f172a !important;
 }
 
+/* Ensure Status, Project, and Task Group stay strictly on one line */
+.saas-status-project-group-row {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  gap: 1.25rem !important;
+  width: 100% !important;
+}
+
+.saas-project-group-container {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  gap: 1.25rem !important;
+  flex-shrink: 0 !important;
+}
+
+.saas-project-field-item,
+.saas-taskgroup-field-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+}
+
+.saas-project-select {
+  min-width: 100px !important;
+  max-width: 180px !important;
+  text-overflow: ellipsis !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+}
+
+.saas-taskgroup-select {
+  min-width: 110px !important;
+  max-width: 200px !important;
+  text-overflow: ellipsis !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+}
+
