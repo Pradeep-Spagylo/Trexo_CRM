@@ -66,7 +66,8 @@ export default function ReportsStatusBased({
   initialFilter,
   onClearInitialFilter,
   initialDate,
-  onClearInitialDate
+  onClearInitialDate,
+  isActive
 }) {
   const [reportType, setReportType] = useState(initialFilter || 'daily');
 
@@ -204,6 +205,40 @@ export default function ReportsStatusBased({
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    reportType, 
+    selectedDailyDate, 
+    selectedMonth, 
+    selectedYear, 
+    customStartDate, 
+    customEndDate, 
+    selectedWeekDate,
+    selectedAssignee,
+    selectedProject,
+    selectedClient,
+    selectedStatus
+  ]);
+
+  // Re-fetch when tab becomes active
+  useEffect(() => {
+    if (isActive) {
+      fetchData();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
+
+  // Live listener for work log / task updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchData();
+    };
+    window.addEventListener('workLogUpdated', handleUpdate);
+    window.addEventListener('taskUpdated', handleUpdate);
+    return () => {
+      window.removeEventListener('workLogUpdated', handleUpdate);
+      window.removeEventListener('taskUpdated', handleUpdate);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     reportType, 

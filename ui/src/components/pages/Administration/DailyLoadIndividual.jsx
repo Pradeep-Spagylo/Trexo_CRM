@@ -47,7 +47,7 @@ const STATUS_HEADER_META = {
   'on hold': { bg: '#d97706', fg: '#ffffff' }
 };
 
-export default function DailyLoadIndividual({ user, onTaskClick, initialUserId, onClearInitialUserId }) {
+export default function DailyLoadIndividual({ user, onTaskClick, initialUserId, onClearInitialUserId, isActive }) {
   const [users, setUsers] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState(initialUserId || 'all');
   const [allTasks, setAllTasks] = useState([]);
@@ -62,33 +62,54 @@ export default function DailyLoadIndividual({ user, onTaskClick, initialUserId, 
     }
   }, [initialUserId]);
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [userData, taskData, worklogData] = await Promise.all([
+        api.get('/users').catch(() => []),
+        api.get('/tasks').catch(() => []),
+        api.get('/worklogs').catch(() => [])
+      ]);
+      const rawUsers = userData || [];
+      const nonAdminUsers = rawUsers.filter(u => (u.role || '').toLowerCase().trim() !== 'admin');
+      const sortedUsers = [...nonAdminUsers].sort((a, b) => {
+        const nameA = a.fullName || a.name || `${a.firstName || ''} ${a.lastName || ''}`.trim() || '';
+        const nameB = b.fullName || b.name || `${b.firstName || ''} ${b.lastName || ''}`.trim() || '';
+        return nameA.localeCompare(nameB);
+      });
+      setUsers(sortedUsers);
+      setAllTasks((taskData || []).filter(t => t.status !== 'Archived' && t.status !== 'Archive' && (t.taskType || '').toLowerCase() !== 'calls/meetings'));
+      setAllWorklogs(worklogData || []);
+    } catch (err) {
+      console.error('Error fetching Daily Load Individual report data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [userData, taskData, worklogData] = await Promise.all([
-          api.get('/users').catch(() => []),
-          api.get('/tasks').catch(() => []),
-          api.get('/worklogs').catch(() => [])
-        ]);
-        const rawUsers = userData || [];
-        const nonAdminUsers = rawUsers.filter(u => (u.role || '').toLowerCase().trim() !== 'admin');
-        const sortedUsers = [...nonAdminUsers].sort((a, b) => {
-          const nameA = a.fullName || a.name || `${a.firstName || ''} ${a.lastName || ''}`.trim() || '';
-          const nameB = b.fullName || b.name || `${b.firstName || ''} ${b.lastName || ''}`.trim() || '';
-          return nameA.localeCompare(nameB);
-        });
-        setUsers(sortedUsers);
-        setAllTasks((taskData || []).filter(t => t.status !== 'Archived' && t.status !== 'Archive' && (t.taskType || '').toLowerCase() !== 'calls/meetings'));
-        setAllWorklogs(worklogData || []);
-      } catch (err) {
-        console.error('Error fetching Daily Load Individual report data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, [user]);
+
+  // Re-fetch when tab becomes active
+  useEffect(() => {
+    if (isActive) {
+      fetchData();
+    }
+  }, [isActive]);
+
+  // Live listener for work log / task updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchData();
+    };
+    window.addEventListener('workLogUpdated', handleUpdate);
+    window.addEventListener('taskUpdated', handleUpdate);
+    return () => {
+      window.removeEventListener('workLogUpdated', handleUpdate);
+      window.removeEventListener('taskUpdated', handleUpdate);
+    };
+  }, []);
 
   const selectedUserObj = users.find(u => u.id === selectedUserId);
   const selectedUserName = selectedUserId === 'all'
