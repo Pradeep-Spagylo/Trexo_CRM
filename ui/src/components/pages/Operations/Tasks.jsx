@@ -1890,6 +1890,9 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
         id: null
       });
       alert(`Work log ${workLogForm.id ? 'updated' : 'added'} successfully!`, 'success', 'Saved');
+      window.dispatchEvent(new CustomEvent('workLogUpdated', { detail: { taskId: task?.id } }));
+      window.dispatchEvent(new CustomEvent('taskUpdated', { detail: { id: task?.id } }));
+      if (onRefresh) onRefresh();
     } catch (err) {
       alert('Failed to add work log: ' + err.message, 'error', 'Error');
     } finally {
@@ -1909,6 +1912,9 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
         await api.delete(`/worklogs/${logId}`);
         fetchWorkLogs();
         alert('Work log deleted', 'success', 'Deleted');
+        window.dispatchEvent(new CustomEvent('workLogUpdated', { detail: { taskId: task?.id } }));
+        window.dispatchEvent(new CustomEvent('taskUpdated', { detail: { id: task?.id } }));
+        if (onRefresh) onRefresh();
       } catch (err) {
         alert('Delete failed', 'error', 'Error');
       } finally {

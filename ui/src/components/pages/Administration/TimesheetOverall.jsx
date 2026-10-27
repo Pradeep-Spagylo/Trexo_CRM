@@ -108,26 +108,50 @@ const downloadCSV = (filename, headers, rowsData) => {
   URL.revokeObjectURL(url);
 };
 
-export default function TimesheetOverall({ onUserClick }) {
+export default function TimesheetOverall({ onUserClick, isActive }) {
   const [filter, setFilter] = useState('daily');
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const { startDate, endDate } = getDateRange(filter, selectedDate);
+      const data = await api.get(`/worklogs?startDate=${startDate}&endDate=${endDate}&includeCalls=true`);
+      setLogs(data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const { startDate, endDate } = getDateRange(filter, selectedDate);
-        const data = await api.get(`/worklogs?startDate=${startDate}&endDate=${endDate}&includeCalls=true`);
-        setLogs(data || []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, selectedDate]);
+
+  // Re-fetch when tab becomes active
+  useEffect(() => {
+    if (isActive) {
+      fetchData();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
+
+  // Live listener for work log / task updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchData();
+    };
+    window.addEventListener('workLogUpdated', handleUpdate);
+    window.addEventListener('taskUpdated', handleUpdate);
+    return () => {
+      window.removeEventListener('workLogUpdated', handleUpdate);
+      window.removeEventListener('taskUpdated', handleUpdate);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, selectedDate]);
 
   const grouped = {};

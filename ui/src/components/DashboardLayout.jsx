@@ -619,7 +619,7 @@ export default function DashboardLayout({ user, onLogout, renderOverview }) {
 
   const renderContent = () => {
     // Helper to render individual tab component
-    const renderTabComponent = (tabId) => {
+    const renderTabComponent = (tabId, isTabActive = false) => {
       switch (tabId) {
         case 'projects':
           if (!can('projects', 'view') && user?.role?.toLowerCase() !== 'admin') {
@@ -779,16 +779,16 @@ export default function DashboardLayout({ user, onLogout, renderOverview }) {
           return <EditUser userToEdit={userToEdit} onBack={() => setActiveTab('users')} />;
         case 'timesheet-overall':
           if (!canReport('timesheet-overall')) return renderOverview(setActiveTab, (taskData) => { const displayId = getDisplayId(taskData); setSelectedTaskId(displayId); setSearchSelectedTask(taskData); setIsTaskDetailOpen(true); setActiveTab('tasks'); });
-          return <TimesheetOverall onUserClick={(userId, initialFilter, initialDate) => { setTimesheetUserId(userId); setTimesheetInitialFilter(initialFilter); setTimesheetInitialDate(initialDate); setActiveTab('reports-status-based'); }} />;
+          return <TimesheetOverall isActive={isTabActive} onUserClick={(userId, initialFilter, initialDate) => { setTimesheetUserId(userId); setTimesheetInitialFilter(initialFilter); setTimesheetInitialDate(initialDate); setActiveTab('reports-status-based'); }} />;
         case 'daily-load-all':
           if (!canReport('daily-load-all')) return renderOverview(setActiveTab, (taskData) => { const displayId = getDisplayId(taskData); setSelectedTaskId(displayId); setSearchSelectedTask(taskData); setIsTaskDetailOpen(true); setActiveTab('tasks'); });
-          return <DailyLoadAll onUserClick={(userId) => { setDailyLoadUserId(userId); setActiveTab('daily-load-individual'); }} />;
+          return <DailyLoadAll isActive={isTabActive} onUserClick={(userId) => { setDailyLoadUserId(userId); setActiveTab('daily-load-individual'); }} />;
         case 'daily-load-individual':
           if (!canReport('daily-load-individual')) return renderOverview(setActiveTab, (taskData) => navigateToTaskDetail(taskData, 'daily-load-individual'));
-          return <DailyLoadIndividual user={user} initialUserId={dailyLoadUserId} onClearInitialUserId={() => setDailyLoadUserId(null)} onTaskClick={(taskData) => navigateToTaskDetail(taskData, 'daily-load-individual')} />;
+          return <DailyLoadIndividual isActive={isTabActive} user={user} initialUserId={dailyLoadUserId} onClearInitialUserId={() => setDailyLoadUserId(null)} onTaskClick={(taskData) => navigateToTaskDetail(taskData, 'daily-load-individual')} />;
         case 'reports-status-based':
           if (!canReport('reports-status-based')) return renderOverview(setActiveTab, (taskData) => navigateToTaskDetail(taskData, 'reports-status-based'));
-          return <ReportsStatusBased user={user} initialUserId={timesheetUserId} onClearInitialUser={() => setTimesheetUserId(null)} initialFilter={timesheetInitialFilter} onClearInitialFilter={() => setTimesheetInitialFilter(null)} initialDate={timesheetInitialDate} onClearInitialDate={() => setTimesheetInitialDate(null)} onNavigateToTask={(taskData) => navigateToTaskDetail(taskData, 'reports-status-based')} />;
+          return <ReportsStatusBased isActive={isTabActive} user={user} initialUserId={timesheetUserId} onClearInitialUser={() => setTimesheetUserId(null)} initialFilter={timesheetInitialFilter} onClearInitialFilter={() => setTimesheetInitialFilter(null)} initialDate={timesheetInitialDate} onClearInitialDate={() => setTimesheetInitialDate(null)} onNavigateToTask={(taskData) => navigateToTaskDetail(taskData, 'reports-status-based')} />;
         case 'reports':
           if (!canReport('tasks-report')) {
             const reportTabs = [
@@ -799,11 +799,11 @@ export default function DashboardLayout({ user, onLogout, renderOverview }) {
             ];
             const firstPermitted = reportTabs.find(rt => canReport(rt.action));
             if (firstPermitted) {
-              return renderTabComponent(firstPermitted.key);
+              return renderTabComponent(firstPermitted.key, isTabActive);
             }
             return renderOverview(setActiveTab, (taskData) => navigateToTaskDetail(taskData, 'reports'));
           }
-          return <Reports user={user} onNavigateToTask={(taskData) => navigateToTaskDetail(taskData, 'reports')} />;
+          return <Reports isActive={isTabActive} user={user} onNavigateToTask={(taskData) => navigateToTaskDetail(taskData, 'reports')} />;
         case 'bug-capture':
           return <BugCapture user={user} />;
         default:
@@ -837,7 +837,7 @@ export default function DashboardLayout({ user, onLogout, renderOverview }) {
                 height: '100%'
               }}
             >
-              {renderTabComponent(tabId)}
+              {renderTabComponent(tabId, currentTabResolved === tabId)}
             </div>
           );
         })}
