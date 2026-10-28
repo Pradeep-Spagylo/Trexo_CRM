@@ -766,15 +766,13 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
   const canEditWorkLog = (log) => {
     if (!log) return false;
     if (log.isBilled) return isTeamLeadOrAdmin || canEdit;
-    if (!isWorkLogToday(log)) return false;
-    return isOwnWorkLog(log) || isAssigned() || isTeamLeadOrAdmin;
+    return isTeamLeadOrAdmin || canEdit || isOwnWorkLog(log) || isAssigned();
   };
 
   const canDeleteWorkLog = (log) => {
     if (!log) return false;
     if (log.isBilled) return isTeamLeadOrAdmin || canDelete;
-    if (!isWorkLogToday(log)) return false;
-    return isOwnWorkLog(log) || isAssigned() || isTeamLeadOrAdmin;
+    return isTeamLeadOrAdmin || canDelete || isOwnWorkLog(log) || isAssigned();
   };
 
   const canDeleteAttachment = (meta) => {
@@ -3718,13 +3716,19 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
                             <tbody>
                               {workLogs.filter(log => !log.isBilled && Number(log.hoursWorked) > 0).map(log => (
                                 <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }} className="attachment-table-row">
-                                  <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>{formatDate(log.logDate, log.createdAt)}</td>
-                                  <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>{log.user?.fullName || log.user?.firstName || 'Unknown'}</td>
-                                  <td style={{ padding: '0.85rem 1rem', fontWeight: 400, color: '#0f172a', fontSize: '12px' }}>{formatWorklogHours(log.hoursWorked)}</td>
+                                  <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>
+                                    <span className="worklog-cell-value">{formatDate(log.logDate, log.createdAt)}</span>
+                                  </td>
+                                  <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>
+                                    <span className="worklog-cell-value">{log.user?.fullName || log.user?.firstName || 'Unknown'}</span>
+                                  </td>
+                                  <td style={{ padding: '0.85rem 1rem', fontWeight: 400, color: '#0f172a', fontSize: '12px' }}>
+                                    <span className="worklog-cell-value" style={{ fontWeight: 600 }}>{formatWorklogHours(log.hoursWorked)}</span>
+                                  </td>
                                   <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
                                     <div style={{ display: 'inline-flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
                                       {canEditWorkLog(log) && (
-                                        <button title="Edit" style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', background: 'white', cursor: 'pointer' }} onClick={() => {
+                                        <button title="Edit" style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', background: 'white', cursor: 'pointer' }} onClick={() => {
                                           const logDateVal = log.logDate || log.createdAt;
                                           let formattedLogDate = new Date().toISOString().split('T')[0];
                                           if (typeof logDateVal === 'string' && /^\d{4}-\d{2}-\d{2}/.test(logDateVal)) {
@@ -3747,9 +3751,12 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
                                         </button>
                                       )}
                                       {canDeleteWorkLog(log) && (
-                                        <button title="Delete" style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', background: '#fef2f2', cursor: 'pointer' }} onClick={() => handleDeleteWorkLog(log.id)}>
+                                        <button title="Delete" style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', background: '#fef2f2', cursor: 'pointer' }} onClick={() => handleDeleteWorkLog(log.id)}>
                                           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                                         </button>
+                                      )}
+                                      {!canEditWorkLog(log) && !canDeleteWorkLog(log) && (
+                                        <span style={{ color: '#94a3b8', fontSize: '12px' }}>-</span>
                                       )}
                                     </div>
                                   </td>
@@ -3836,14 +3843,22 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
                       <tbody>
                         {workLogs.filter(log => log.isBilled).map(log => (
                           <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }} className="attachment-table-row">
-                            <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>{formatDate(log.logDate, log.createdAt)}</td>
-                            <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>{log.user?.fullName || log.user?.firstName || 'Unknown'}</td>
-                            <td style={{ padding: '0.85rem 1rem', fontWeight: 400, color: '#0f172a', fontSize: '12px' }}>{formatWorklogHours(log.hoursWorked)}</td>
-                            <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>{log.description || '-'}</td>
+                            <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>
+                              <span className="worklog-cell-value">{formatDate(log.logDate, log.createdAt)}</span>
+                            </td>
+                            <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>
+                              <span className="worklog-cell-value">{log.user?.fullName || log.user?.firstName || 'Unknown'}</span>
+                            </td>
+                            <td style={{ padding: '0.85rem 1rem', fontWeight: 400, color: '#0f172a', fontSize: '12px' }}>
+                              <span className="worklog-cell-value" style={{ fontWeight: 600 }}>{formatWorklogHours(log.hoursWorked)}</span>
+                            </td>
+                            <td style={{ padding: '0.85rem 1rem', fontSize: '12px', color: '#475569', fontWeight: 400 }}>
+                              <span className="worklog-cell-value">{log.description || '-'}</span>
+                            </td>
                             <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
                               <div style={{ display: 'inline-flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
                                 {canEdit && (
-                                  <button title="Edit" style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', background: 'white', cursor: 'pointer' }} onClick={() => {
+                                  <button title="Edit" style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', background: 'white', cursor: 'pointer' }} onClick={() => {
                                     const logDateVal = log.logDate || log.createdAt;
                                     let formattedLogDate = new Date().toISOString().split('T')[0];
                                     if (typeof logDateVal === 'string' && /^\d{4}-\d{2}-\d{2}/.test(logDateVal)) {
@@ -3866,9 +3881,12 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
                                   </button>
                                 )}
                                 {canDelete && (
-                                  <button title="Delete" style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', background: '#fef2f2', cursor: 'pointer' }} onClick={() => handleDeleteWorkLog(log.id)}>
+                                  <button title="Delete" style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', background: '#fef2f2', cursor: 'pointer' }} onClick={() => handleDeleteWorkLog(log.id)}>
                                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                                   </button>
+                                )}
+                                {!canEdit && !canDelete && (
+                                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>-</span>
                                 )}
                               </div>
                             </td>
