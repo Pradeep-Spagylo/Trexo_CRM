@@ -56,7 +56,7 @@ const getWeekRange = (dateStr) => {
   };
 };
 
-export default function Reports({ user, onNavigateToTask }) {
+export default function Reports({ user, onNavigateToTask, isActive }) {
   const [reportType, setReportType] = useState('daily'); // 'daily' | 'weekly' | 'monthly' | 'custom'
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -143,7 +143,29 @@ export default function Reports({ user, onNavigateToTask }) {
   useEffect(() => {
     fetchReports();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportType, selectedDailyDate, selectedMonth, selectedYear, customStartDate, customEndDate, selectedClient, selectedWeekDate]);
+  }, [reportType, selectedDailyDate, selectedMonth, selectedYear, customStartDate, customEndDate, selectedClient, selectedWeekDate, selectedProject, selectedAssignee]);
+
+  // Re-fetch when tab becomes active
+  useEffect(() => {
+    if (isActive) {
+      fetchReports();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
+
+  // Live listener for work log / task updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchReports();
+    };
+    window.addEventListener('workLogUpdated', handleUpdate);
+    window.addEventListener('taskUpdated', handleUpdate);
+    return () => {
+      window.removeEventListener('workLogUpdated', handleUpdate);
+      window.removeEventListener('taskUpdated', handleUpdate);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportType, selectedDailyDate, selectedMonth, selectedYear, customStartDate, customEndDate, selectedClient, selectedWeekDate, selectedProject, selectedAssignee]);
 
   const totalTasks = tasks.length;
   const totalApprovedHours = tasks.reduce((sum, t) => sum + (parseFloat(t.taskApprovedHours) || 0), 0);

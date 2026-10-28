@@ -572,7 +572,8 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
     
     const keysToCompare = [
       'title', 'description', 'status', 'assignees', 'dueDate', 'deliveredDate', 'priority',
-      'tag', 'taskType', 'isBillable', 'billableAmount', 'estimatedHours', 'approvedHours', 'actualHours', 'attachments'
+      'tag', 'taskType', 'isBillable', 'billableAmount', 'estimatedHours', 'approvedHours', 'actualHours', 'attachments',
+      'projectId', 'taskListId'
     ];
     
     for (const key of keysToCompare) {
@@ -635,36 +636,42 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
     }
   }, [isEdit, task?.id, task?.parentId]);
 
-  const currentProjId = form.projectId 
-    || (form.projectName ? projects.find(p => p.name === form.projectName)?.id : null)
-    || (task && (task.projectId || (task.taskListId && taskLists.find(l => l.id === task.taskListId)?.projectId)));
-  const currentProject = currentProjId ? projects.find(p => p.id === currentProjId) : null;
-  const projectMemberIds = currentProject ? (currentProject.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean) : [];
+  const resolvedProjectId = form.projectId 
+    || (task && task.projectId)
+    || (projects.length > 0 && form.projectName && projects.find(p => p.name?.trim().toLowerCase() === form.projectName?.trim().toLowerCase())?.id)
+    || (projects.length > 0 && task?.projectName && projects.find(p => p.name?.trim().toLowerCase() === task.projectName?.trim().toLowerCase())?.id)
+    || (taskLists.length > 0 && (form.taskListId || task?.taskListId) && taskLists.find(tl => tl.id === (form.taskListId || task?.taskListId))?.projectId)
+    || '';
+
+  const activeProject = resolvedProjectId ? projects.find(p => p.id === resolvedProjectId) : null;
+  const projectMemberTokens = activeProject ? (activeProject.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean) : [];
   
-  const filteredUsers = (currentProject
-    ? (projectMemberIds.length > 0
-      ? users.filter(u => projectMemberIds.includes(u.id.toLowerCase()))
+  const filteredUsers = (activeProject
+    ? (projectMemberTokens.length > 0
+      ? users.filter(u => 
+          projectMemberTokens.includes((u.id || '').toLowerCase()) ||
+          projectMemberTokens.includes((u.fullName || '').toLowerCase()) ||
+          projectMemberTokens.includes(`${(u.firstName || '').toLowerCase()} ${(u.lastName || '').toLowerCase()}`.trim()) ||
+          projectMemberTokens.includes((u.email || '').toLowerCase())
+        )
       : []
     )
     : users
   ).filter(u => u.status !== 'Inactive');
 
-  const finalUsers = (() => {
-    let list = [...filteredUsers];
-    const currentAssigneeId = form.assignees;
-    if (currentAssigneeId) {
-      const ids = currentAssigneeId.split(',').map(i => i.trim()).filter(Boolean);
-      ids.forEach(id => {
-        if (!list.some(u => u.id === id)) {
-          const assignedUserObj = users.find(u => u.id === id);
-          if (assignedUserObj) {
-            list.push(assignedUserObj);
-          }
-        }
-      });
+  const finalUsers = activeProject
+    ? filteredUsers
+    : users.filter(u => u.status !== 'Inactive');
+
+  useEffect(() => {
+    if (activeProject && form.assignees) {
+      const isMember = finalUsers.some(u => u.id === form.assignees);
+      if (!isMember) {
+        setForm(prev => ({ ...prev, assignees: '' }));
+      }
     }
-    return list;
-  })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject?.id, form.assignees, finalUsers]);
 
 
   const [comments, setComments] = useState([]);
@@ -1881,6 +1888,9 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
         id: null
       });
       alert(`Work log ${workLogForm.id ? 'updated' : 'added'} successfully!`, 'success', 'Saved');
+      window.dispatchEvent(new CustomEvent('workLogUpdated', { detail: { taskId: task?.id } }));
+      window.dispatchEvent(new CustomEvent('taskUpdated', { detail: { id: task?.id } }));
+      if (onRefresh) onRefresh();
     } catch (err) {
       alert('Failed to add work log: ' + err.message, 'error', 'Error');
     } finally {
@@ -1900,6 +1910,9 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
         await api.delete(`/worklogs/${logId}`);
         fetchWorkLogs();
         alert('Work log deleted', 'success', 'Deleted');
+        window.dispatchEvent(new CustomEvent('workLogUpdated', { detail: { taskId: task?.id } }));
+        window.dispatchEvent(new CustomEvent('taskUpdated', { detail: { id: task?.id } }));
+        if (onRefresh) onRefresh();
       } catch (err) {
         alert('Delete failed', 'error', 'Error');
       } finally {
@@ -2004,6 +2017,116 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
       setForm(form);
     }
   };
+
+  const getCombinedProjectTaskGroup = (proj, group) => {
+    const p = (proj && proj !== '-') ? proj.trim() : '';
+    const g = (group && group !== '-') ? group.trim() : '';
+    if (p && g) {
+      if (p.toLowerCase() === g.toLowerCase()) return p;
+      return `${p} - ${g}`;
+    }
+    if (p) return p;
+    if (g) return g;
+    return '';
+  };
+
+  const resolvedTaskListId = form.taskListId 
+    || (task && task.taskListId)
+    || (taskLists.length > 0 && form.taskGroupName && taskLists.find(tl => tl.name?.trim().toLowerCase() === form.taskGroupName?.trim().toLowerCase())?.id)
+    || (taskLists.length > 0 && task?.taskGroupName && taskLists.find(tl => tl.name?.trim().toLowerCase() === task.taskGroupName?.trim().toLowerCase())?.id)
+    || '';
+
+  const resolvedProjectName = form.projectName 
+    || (task && task.projectName)
+    || (projects.length > 0 && resolvedProjectId && projects.find(p => p.id === resolvedProjectId)?.name)
+    || (projects.length > 0 && form.projectId && projects.find(p => p.id === form.projectId)?.name)
+    || (projects.length > 0 && task?.projectId && projects.find(p => p.id === task.projectId)?.name)
+    || (taskLists.length > 0 && (form.taskListId || task?.taskListId) && projects.length > 0 && projects.find(p => p.id === taskLists.find(l => l.id === (form.taskListId || task?.taskListId))?.projectId)?.name)
+    || '';
+
+  const resolvedTaskGroup = form.taskGroupName
+    || (task && task.taskGroupName)
+    || (taskLists.length > 0 && resolvedTaskListId && taskLists.find(tl => tl.id === resolvedTaskListId)?.name)
+    || (taskLists.length > 0 && (form.taskListId || task?.taskListId) && taskLists.find(tl => tl.id === (form.taskListId || task?.taskListId))?.name)
+    || '';
+
+  const combinedProjectTaskGroup = getCombinedProjectTaskGroup(resolvedProjectName, resolvedTaskGroup);
+
+  const availableTaskLists = resolvedProjectId
+    ? taskLists.filter(tl => !tl.projectId || tl.projectId === resolvedProjectId)
+    : taskLists;
+
+  const handleProjectChange = (e) => {
+    const newProjId = e.target.value;
+    const selectedProj = projects.find(p => p.id === newProjId);
+    const newProjName = selectedProj ? selectedProj.name : '';
+
+    const currentTL = taskLists.find(tl => tl.id === (form.taskListId || resolvedTaskListId));
+    const belongsToNewProject = currentTL && (!newProjId || currentTL.projectId === newProjId);
+
+    // Validate that current assignee belongs to the selected project
+    let updatedAssignees = form.assignees;
+    if (selectedProj) {
+      const memberTokens = (selectedProj.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+      const isMember = users.some(u => 
+        u.id === form.assignees && (
+          memberTokens.includes((u.id || '').toLowerCase()) ||
+          memberTokens.includes((u.fullName || '').toLowerCase()) ||
+          memberTokens.includes(`${(u.firstName || '').toLowerCase()} ${(u.lastName || '').toLowerCase()}`.trim()) ||
+          memberTokens.includes((u.email || '').toLowerCase())
+        )
+      );
+      if (!isMember) {
+        updatedAssignees = '';
+      }
+    }
+
+    const updated = {
+      ...form,
+      projectId: newProjId,
+      projectName: newProjName,
+      assignees: updatedAssignees,
+      ...(!belongsToNewProject ? { taskListId: '', taskGroupName: '' } : {})
+    };
+    setForm(updated);
+    if (!isEditing || isEdit) handleInlineSave(updated);
+  };
+
+  const handleTaskGroupChange = (e) => {
+    const newTLId = e.target.value;
+    const selectedTL = taskLists.find(tl => tl.id === newTLId);
+    const newTLName = selectedTL ? selectedTL.name : '';
+
+    let updated = {
+      ...form,
+      taskListId: newTLId,
+      taskGroupName: newTLName
+    };
+
+    if (selectedTL && selectedTL.projectId && selectedTL.projectId !== (form.projectId || resolvedProjectId)) {
+      const parentProj = projects.find(p => p.id === selectedTL.projectId);
+      updated.projectId = selectedTL.projectId;
+      if (parentProj) {
+        updated.projectName = parentProj.name;
+        const memberTokens = (parentProj.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+        const isMember = users.some(u => 
+          u.id === form.assignees && (
+            memberTokens.includes((u.id || '').toLowerCase()) ||
+            memberTokens.includes((u.fullName || '').toLowerCase()) ||
+            memberTokens.includes(`${(u.firstName || '').toLowerCase()} ${(u.lastName || '').toLowerCase()}`.trim()) ||
+            memberTokens.includes((u.email || '').toLowerCase())
+          )
+        );
+        if (!isMember) {
+          updated.assignees = '';
+        }
+      }
+    }
+
+    setForm(updated);
+    if (!isEditing || isEdit) handleInlineSave(updated);
+  };
+
   const submit = async () => {
     if (taskSavingRef.current || taskSaving) return;
     if (isEdit && !isChanged()) {
@@ -2046,6 +2169,31 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
 
     // Sanitize data for API
     const { comments, taskList, ...payload } = form;
+    if (resolvedProjectId && !payload.projectId) {
+      payload.projectId = resolvedProjectId;
+    }
+    if (resolvedTaskListId && !payload.taskListId) {
+      payload.taskListId = resolvedTaskListId;
+    }
+    if (payload.projectId) {
+      payload.projectName = projects.find(p => p.id === payload.projectId)?.name || payload.projectName;
+    }
+    if (payload.taskListId) {
+      payload.taskGroupName = taskLists.find(tl => tl.id === payload.taskListId)?.name || payload.taskGroupName;
+    }
+    if (!payload.taskListId || payload.taskListId === 'unassigned' || String(payload.taskListId).startsWith('gen_')) {
+      payload.taskListId = null;
+    }
+    if (!payload.projectId || payload.projectId === 'unassigned_proj' || String(payload.projectId).startsWith('gen_')) {
+      payload.projectId = null;
+    }
+
+    // Persist last selected project and task group for future common New task creation
+    if (payload.projectId) localStorage.setItem('lastTaskProjectId', payload.projectId);
+    if (payload.projectName) localStorage.setItem('lastTaskProjectName', payload.projectName);
+    if (payload.taskListId) localStorage.setItem('lastTaskTaskListId', payload.taskListId);
+    if (payload.taskGroupName) localStorage.setItem('lastTaskTaskGroupName', payload.taskGroupName);
+
     if (form.taskType === 'calls/meetings') {
       payload.assignees = currentUser?.id || '';
       payload.dueDate = null;
@@ -2556,33 +2704,6 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
     );
   }
 
-  const getCombinedProjectTaskGroup = (proj, group) => {
-    const p = (proj && proj !== '-') ? proj.trim() : '';
-    const g = (group && group !== '-') ? group.trim() : '';
-    if (p && g) {
-      if (p.toLowerCase() === g.toLowerCase()) return p;
-      return `${p} - ${g}`;
-    }
-    if (p) return p;
-    if (g) return g;
-    return '';
-  };
-
-  const resolvedProjectName = form.projectName 
-    || (task && task.projectName)
-    || (projects && form.projectId && projects.find(p => p.id === form.projectId)?.name)
-    || (projects && task?.projectId && projects.find(p => p.id === task.projectId)?.name)
-    || (taskLists && (form.taskListId || task?.taskListId) && projects && projects.find(p => p.id === taskLists.find(l => l.id === (form.taskListId || task?.taskListId))?.projectId)?.name)
-    || '';
-
-  const resolvedTaskGroup = form.taskGroupName
-    || (task && task.taskGroupName)
-    || (taskLists && (form.taskListId || task?.taskListId) && taskLists.find(tl => tl.id === (form.taskListId || task?.taskListId))?.name)
-    || (task && task.taskListId && taskLists && taskLists.find(tl => tl.id === task.taskListId)?.name)
-    || '';
-
-  const combinedProjectTaskGroup = getCombinedProjectTaskGroup(resolvedProjectName, resolvedTaskGroup);
-
   return (
     <div className="saas-task-page">
       {/* Top Navigation Bar */}
@@ -2783,30 +2904,117 @@ export function TaskDetailView({ task, onSave, onDelete, onClose, currentUser, i
               <>
               <div className="saas-meta-grid animate-fade-in" style={{ paddingBottom: '2rem' }}>
                 
-                {/* Row 1: Status & Combined Project - Task Group Name on Right Side */}
+                {/* Row 1: Status & Project / Task Group Dropdowns on Right Side */}
+                {/* Row 1: Status & Project / Task Group Dropdowns on Right Side */}
                 {form.taskType !== 'calls/meetings' ? (
                   <div className="saas-meta-row saas-meta-row-2col" style={{ gap: '1rem', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <span className="saas-meta-label" style={{ color: '#64748b', fontSize: '12px', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><IconStatus /> Status</span>
-                    <span className="saas-meta-value" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', width: '100%' }}>
-                      <select value={form.status} onChange={e => { const newSt = e.target.value; const updated = { ...form, status: newSt }; if (newSt === 'Archived' || newSt === 'Archive') { updated.previousStatus = (form.status !== 'Archived' && form.status !== 'Archive') ? form.status : (form.previousStatus || 'To Do'); } setForm(updated); if (!isEditing || isEdit) handleInlineSave(updated); }} disabled={!canEdit} className="saas-grid-select" style={{ width: 'fit-content', padding: '0.4rem', border: '1px solid transparent', background: 'transparent', cursor: canEdit ? 'pointer' : 'default', color: '#64748b', fontSize: '12px', fontWeight: 400 }}>
+                    <span className="saas-meta-label" style={{ color: '#64748b', fontSize: '12px', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flexShrink: 0 }}><IconStatus /> Status</span>
+                    <span className="saas-meta-value saas-status-project-group-row" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', width: '100%', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
+                      <select 
+                        value={form.status} 
+                        onChange={e => { 
+                          const newSt = e.target.value; 
+                          const updated = { ...form, status: newSt }; 
+                          if (newSt === 'Archived' || newSt === 'Archive') { 
+                            updated.previousStatus = (form.status !== 'Archived' && form.status !== 'Archive') ? form.status : (form.previousStatus || 'To Do'); 
+                          } 
+                          setForm(updated); 
+                          if (!isEditing || isEdit) handleInlineSave(updated); 
+                        }} 
+                        disabled={!canEdit} 
+                        className="saas-grid-select" 
+                        style={{ width: 'fit-content', padding: '0.4rem', border: '1px solid transparent', background: 'transparent', cursor: canEdit ? 'pointer' : 'default', color: '#64748b', fontSize: '12px', fontWeight: 400, flexShrink: 0 }}
+                      >
                         {STATUS_OPTIONS.map(col => <option key={col.id} value={col.id}>{col.label}</option>)}
                       </select>
-                      {combinedProjectTaskGroup && (
-                        <span style={{ color: '#0f172a', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', userSelect: 'text' }} title={combinedProjectTaskGroup}>
-                          {combinedProjectTaskGroup}
-                        </span>
-                      )}
+
+                      {/* Project and Task Group matching Due -> Delivery UI */}
+                      <div className="saas-project-group-container" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'nowrap', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        <div className="saas-project-field-item" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0 }}>Project:</span>
+                          <select
+                            value={resolvedProjectId}
+                            onChange={handleProjectChange}
+                            disabled={!canEdit}
+                            className="saas-detail-date-input saas-detail-field-select saas-project-select"
+                            style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedProjectId ? '#0f172a' : '#64748b', minWidth: '100px', maxWidth: '180px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
+                            title={projects.find(p => p.id === resolvedProjectId)?.name || "Project"}
+                          >
+                            <option value="">Select Project...</option>
+                            {projects.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="saas-taskgroup-field-item" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0 }}>Task Group:</span>
+                          <select
+                            value={resolvedTaskListId}
+                            onChange={handleTaskGroupChange}
+                            disabled={!canEdit}
+                            className="saas-detail-date-input saas-detail-field-select saas-taskgroup-select"
+                            style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedTaskListId ? '#0f172a' : '#64748b', minWidth: '110px', maxWidth: '200px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
+                            title={availableTaskLists.find(tl => tl.id === resolvedTaskListId)?.name || "Task Group"}
+                          >
+                            <option value="">Select Task Group...</option>
+                            {availableTaskLists.map(tl => {
+                              const projName = !resolvedProjectId && tl.projectId ? (projects.find(p => p.id === tl.projectId)?.name) : null;
+                              return (
+                                <option key={tl.id} value={tl.id}>
+                                  {tl.name}{projName ? ` (${projName})` : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      </div>
                     </span>
                   </div>
                 ) : (
-                  combinedProjectTaskGroup && (
-                    <div className="saas-meta-row saas-meta-row-2col" style={{ gap: '1rem', alignItems: 'center', marginBottom: '0.75rem' }}>
-                      <span className="saas-meta-label" style={{ color: '#64748b', fontSize: '12px', fontWeight: 400 }}></span>
-                      <span className="saas-meta-value" style={{ color: '#0f172a', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', userSelect: 'text' }} title={combinedProjectTaskGroup}>
-                        {combinedProjectTaskGroup}
-                      </span>
-                    </div>
-                  )
+                  <div className="saas-meta-row saas-meta-row-2col" style={{ gap: '1rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <span className="saas-meta-label" style={{ color: '#64748b', fontSize: '12px', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flexShrink: 0 }}><IconProject /> Project & Group</span>
+                    <span className="saas-meta-value saas-project-group-container" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', width: '100%', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
+                      <div className="saas-project-field-item" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0 }}>Project:</span>
+                        <select
+                          value={resolvedProjectId}
+                          onChange={handleProjectChange}
+                          disabled={!canEdit}
+                          className="saas-detail-date-input saas-detail-field-select saas-project-select"
+                          style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedProjectId ? '#0f172a' : '#64748b', minWidth: '100px', maxWidth: '180px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
+                          title={projects.find(p => p.id === resolvedProjectId)?.name || "Project"}
+                        >
+                          <option value="">Select Project...</option>
+                          {projects.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="saas-taskgroup-field-item" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap', flexShrink: 0 }}>Task Group:</span>
+                        <select
+                          value={resolvedTaskListId}
+                          onChange={handleTaskGroupChange}
+                          disabled={!canEdit}
+                          className="saas-detail-date-input saas-detail-field-select saas-taskgroup-select"
+                          style={{ border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f8fafc', padding: '0.15rem 0.35rem', fontSize: '12px', color: resolvedTaskListId ? '#0f172a' : '#64748b', minWidth: '110px', maxWidth: '200px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', cursor: canEdit ? 'pointer' : 'default', fontWeight: 400, outline: 'none' }}
+                          title={availableTaskLists.find(tl => tl.id === resolvedTaskListId)?.name || "Task Group"}
+                        >
+                          <option value="">Select Task Group...</option>
+                          {availableTaskLists.map(tl => {
+                            const projName = !resolvedProjectId && tl.projectId ? (projects.find(p => p.id === tl.projectId)?.name) : null;
+                            return (
+                              <option key={tl.id} value={tl.id}>
+                                {tl.name}{projName ? ` (${projName})` : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    </span>
+                  </div>
                 )}
 
                 {/* Row 1b: Assignees & Type */}
@@ -5510,8 +5718,16 @@ export default function Tasks({ user, initialSelectedTask, onClearInitialTask, o
         if (!silent) toast('Task updated successfully!', 'success');
       } else {
         if (taskData.assignees) localStorage.setItem('lastTaskAssignee', taskData.assignees);
+        if (taskData.projectId) localStorage.setItem('lastTaskProjectId', taskData.projectId);
+        if (taskData.projectName) localStorage.setItem('lastTaskProjectName', taskData.projectName);
+        if (taskData.taskListId) localStorage.setItem('lastTaskTaskListId', taskData.taskListId);
+        if (taskData.taskGroupName) localStorage.setItem('lastTaskTaskGroupName', taskData.taskGroupName);
         savedTask = await api.post('/tasks', taskData);
         if (savedTask) {
+          if (savedTask.projectId) localStorage.setItem('lastTaskProjectId', savedTask.projectId);
+          if (savedTask.projectName) localStorage.setItem('lastTaskProjectName', savedTask.projectName);
+          if (savedTask.taskListId) localStorage.setItem('lastTaskTaskListId', savedTask.taskListId);
+          if (savedTask.taskGroupName) localStorage.setItem('lastTaskTaskGroupName', savedTask.taskGroupName || '');
           setTasks(prevTasks => [savedTask, ...prevTasks]);
           window.dispatchEvent(new CustomEvent('taskUpdated', { detail: savedTask }));
         }
@@ -5549,22 +5765,57 @@ export default function Tasks({ user, initialSelectedTask, onClearInitialTask, o
   };
 
   const openNewTask = (presetStatus = 'To Do', presetProject = '', presetProjectId = null, presetTaskListId = null, presetClientId = null) => {
+    const cleanTLId = (presetTaskListId && !String(presetTaskListId).startsWith('gen_') && presetTaskListId !== 'unassigned') ? presetTaskListId : null;
+    const cleanProjId = (presetProjectId && presetProjectId !== 'unassigned_proj' && !String(presetProjectId).startsWith('gen_')) ? presetProjectId : null;
+
+    let initialAssignee = getLastAssignee(user?.id);
+    if (cleanProjId) {
+      const targetProj = taskProjects.find(p => p.id === cleanProjId);
+      if (targetProj) {
+        const memberTokens = (targetProj.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+        const isMember = memberTokens.includes((initialAssignee || '').toLowerCase()) || (user && user.id === initialAssignee && memberTokens.includes(user.id.toLowerCase()));
+        if (!isMember) {
+          initialAssignee = '';
+        }
+      }
+    }
+
     setDrawerTask({
       status: presetStatus,
       projectName: presetProject,
-      projectId: presetProjectId,
-      taskListId: presetTaskListId,
+      projectId: cleanProjId,
+      taskListId: cleanTLId,
       clientId: presetClientId,
       priority: 'Medium',
       title: '',
       description: '',
-      assignees: getLastAssignee(user?.id),
+      assignees: initialAssignee,
       isBillable: false,
       tag: 'Engineering',
       taskType: 'Task'
     });
     setTaskDetailMode(true);
     setDrawerOpen(true);
+  };
+
+  const handleCommonNewTask = () => {
+    const lastProjectId = localStorage.getItem('lastTaskProjectId') || null;
+    const lastProjectName = localStorage.getItem('lastTaskProjectName') || '';
+    const lastTaskListId = localStorage.getItem('lastTaskTaskListId') || null;
+
+    // Verify project exists in taskProjects
+    const verifiedProject = lastProjectId
+      ? taskProjects.find(p => p.id === lastProjectId)
+      : (lastProjectName ? taskProjects.find(p => p.name?.toLowerCase() === lastProjectName.toLowerCase()) : null);
+
+    const finalProjId = verifiedProject ? verifiedProject.id : null;
+    const finalProjName = verifiedProject ? verifiedProject.name : '';
+
+    // Verify task group belongs to project
+    const verifiedTL = lastTaskListId ? taskListsData.find(tl => tl.id === lastTaskListId) : null;
+    const finalTLId = (verifiedTL && (!finalProjId || verifiedTL.projectId === finalProjId)) ? verifiedTL.id : null;
+
+    openNewTask('To Do', finalProjName, finalProjId, finalTLId, verifiedProject?.clientId || null);
   };
 
   const closeDrawer = () => {
@@ -6175,15 +6426,41 @@ export default function Tasks({ user, initialSelectedTask, onClearInitialTask, o
                 setFilterType('');
                 setFilterFromDate('');
                 setFilterToDate('');
+                api.post('/tasks/check-recurring').then(() => {
+                  fetchTasks();
+                }).catch(() => {});
               }}
             >
               Recurring ({unreadRecurringCount})
             </button>
           </div>
           {subTab !== 'calls' && (
-            <div className="view-toggle view-toggle-desktop" style={{ marginBottom: '8px' }}>
-              <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>List</button>
-              <button className={viewMode === 'kanban' ? 'active' : ''} onClick={() => setViewMode('kanban')}>Kanban</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '8px' }}>
+              <div className="view-toggle view-toggle-desktop" style={{ marginBottom: 0 }}>
+                <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>List</button>
+                <button className={viewMode === 'kanban' ? 'active' : ''} onClick={() => setViewMode('kanban')}>Kanban</button>
+              </div>
+              {can('tasks', 'create') && (
+                <button
+                  className="kanban-new-btn"
+                  title="Create New Task"
+                  style={{
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    boxShadow: 'none',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    height: '28px'
+                  }}
+                  onClick={handleCommonNewTask}
+                >
+                  New
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -7193,7 +7470,7 @@ export default function Tasks({ user, initialSelectedTask, onClearInitialTask, o
                                       e.stopPropagation();
                                       const list = projGroup.lists[0];
                                       const p = taskProjects.find(pr => pr.id === projGroup.id);
-                                      openNewTask(col.id, projGroup.name, projGroup.id, list && !String(list.id).startsWith('gen_') ? list.id : null, p ? p.clientId : null);
+                                      openNewTask(col.id, projGroup.name, projGroup.id, list && !String(list.id).startsWith('gen_') && list.id !== 'unassigned' ? list.id : null, p ? p.clientId : null);
                                     }}>+ Add</button>
                                   )}
                                 </div>
