@@ -5735,10 +5735,10 @@
   .subtask-table-responsive tr {
     border: 1px solid #e2e8f0 !important;
     border-radius: 12px !important;
-    padding: 0.75rem !important;
+    padding: 0.5rem 0.85rem !important;
     margin-bottom: 0.75rem !important;
     background: #ffffff !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
   }
 
   .worklog-table-responsive td,
@@ -5748,13 +5748,16 @@
     border: none !important;
     border-bottom: 1px solid #f1f5f9 !important;
     position: relative !important;
-    padding: 0.5rem 0.5rem 0.5rem 40% !important;
-    text-align: left !important;
+    padding: 0.6rem 0.25rem !important;
+    text-align: right !important;
     white-space: normal !important;
-    min-height: 36px !important;
+    min-height: 40px !important;
     display: flex !important;
     align-items: center !important;
+    justify-content: space-between !important;
     word-break: break-word !important;
+    gap: 0.75rem !important;
+    box-sizing: border-box !important;
   }
 
   .worklog-table-responsive td:last-child,
@@ -5768,15 +5771,34 @@
   .billed-table-responsive td:before,
   .attachment-table-responsive td:before,
   .subtask-table-responsive td:before {
-    position: absolute !important;
-    left: 10px !important;
-    width: 35% !important;
-    padding-right: 10px !important;
+    position: static !important;
+    display: inline-block !important;
+    flex-shrink: 0 !important;
     white-space: nowrap !important;
     font-weight: 700 !important;
     color: #64748b !important;
-    font-size: 0.72rem !important;
+    font-size: 0.75rem !important;
     text-transform: none !important;
+    text-align: left !important;
+  }
+
+  .worklog-table-responsive td > *,
+  .billed-table-responsive td > *,
+  .attachment-table-responsive td > *,
+  .subtask-table-responsive td > * {
+    margin-left: auto !important;
+    text-align: right !important;
+  }
+
+  .worklog-table-responsive td:last-child > div,
+  .billed-table-responsive td:last-child > div,
+  .attachment-table-responsive td:last-child > div,
+  .subtask-table-responsive td:last-child > div {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 0.5rem !important;
+    margin-left: auto !important;
   }
 
   /* Specific headers for Worklog */
@@ -5812,6 +5834,7 @@
   .attachment-table-responsive table,
   .subtask-table-responsive table {
     min-width: 0 !important;
+    width: 100% !important;
   }
 }
 
@@ -5902,112 +5925,7 @@
   .calls-add-btn-mobile {
     display: inline;
   }
-  .attachment-table-responsive th,
-  .subtask-table-responsive th,
-  .worklog-table-responsive td,
-  .billed-table-responsive td,
-  .attachment-table-responsive td,
-  .subtask-table-responsive td,
-  .worklog-table-responsive tr,
-  .billed-table-responsive tr,
-  .attachment-table-responsive tr,
-  .subtask-table-responsive tr {
-    display: block !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-  }
 
-  .worklog-table-responsive thead,
-  .billed-table-responsive thead,
-  .attachment-table-responsive thead,
-  .subtask-table-responsive thead {
-    display: none !important;
-  }
-
-  .worklog-table-responsive tr,
-  .billed-table-responsive tr,
-  .attachment-table-responsive tr,
-  .subtask-table-responsive tr {
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 12px !important;
-    padding: 0.75rem !important;
-    margin-bottom: 0.75rem !important;
-    background: #ffffff !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
-  }
-
-  .worklog-table-responsive td,
-  .billed-table-responsive td,
-  .attachment-table-responsive td,
-  .subtask-table-responsive td {
-    border: none !important;
-    border-bottom: 1px solid #f1f5f9 !important;
-    position: relative !important;
-    padding: 0.5rem 0.5rem 0.5rem 40% !important;
-    text-align: left !important;
-    white-space: normal !important;
-    min-height: 36px !important;
-    display: flex !important;
-    align-items: center !important;
-    word-break: break-word !important;
-  }
-
-  .worklog-table-responsive td:last-child,
-  .billed-table-responsive td:last-child,
-  .attachment-table-responsive td:last-child,
-  .subtask-table-responsive td:last-child {
-    border-bottom: none !important;
-  }
-
-  .worklog-table-responsive td:before,
-  .billed-table-responsive td:before,
-  .attachment-table-responsive td:before,
-  .subtask-table-responsive td:before {
-    position: absolute !important;
-    left: 10px !important;
-    width: 35% !important;
-    padding-right: 10px !important;
-    white-space: nowrap !important;
-    font-weight: 700 !important;
-    color: #64748b !important;
-    font-size: 0.72rem !important;
-    text-transform: none !important;
-  }
-
-  /* Specific headers for Worklog */
-  .worklog-table-responsive td:nth-of-type(1):before { content: "Date" !important; }
-  .worklog-table-responsive td:nth-of-type(2):before { content: "User" !important; }
-  .worklog-table-responsive td:nth-of-type(3):before { content: "Timespent" !important; }
-  .worklog-table-responsive td:nth-of-type(4):before { content: "Actions" !important; }
-
-  /* Specific headers for Billed Logs */
-  .billed-table-responsive td:nth-of-type(1):before { content: "Date" !important; }
-  .billed-table-responsive td:nth-of-type(2):before { content: "User" !important; }
-  .billed-table-responsive td:nth-of-type(3):before { content: "Billed Hours" !important; }
-  .billed-table-responsive td:nth-of-type(4):before { content: "Description" !important; }
-  .billed-table-responsive td:nth-of-type(5):before { content: "Actions" !important; }
-
-  /* Specific headers for Attachments */
-  .attachment-table-responsive td:nth-of-type(1):before { content: "File Name" !important; }
-  .attachment-table-responsive td:nth-of-type(2):before { content: "Uploaded By" !important; }
-  .attachment-table-responsive td:nth-of-type(3):before { content: "Uploaded On" !important; }
-  .attachment-table-responsive td:nth-of-type(4):before { content: "File Size" !important; }
-  .attachment-table-responsive td:nth-of-type(5):before { content: "Actions" !important; }
-
-  /* Specific headers for Subtasks */
-  .subtask-table-responsive td:nth-of-type(1):before { content: "Subtask Title" !important; }
-  .subtask-table-responsive td:nth-of-type(2):before { content: "Assignee" !important; }
-  .subtask-table-responsive td:nth-of-type(3):before { content: "Status" !important; }
-  .subtask-table-responsive td:nth-of-type(4):before { content: "Due Date" !important; }
-  .subtask-table-responsive td:nth-of-type(5):before { content: "Priority" !important; }
-  .subtask-table-responsive td:nth-of-type(6):before { content: "Actions" !important; }
-
-  .worklog-table-responsive table,
-  .billed-table-responsive table,
-  .attachment-table-responsive table,
-  .subtask-table-responsive table {
-    min-width: 0 !important;
-  }
 }
 
 @media (max-width: 600px) {
@@ -6131,13 +6049,15 @@
   background-color: #f1f5f9 !important;
 }
 
-.worklog-table-responsive th,
-.worklog-table-responsive td,
-.billed-table-responsive th,
-.billed-table-responsive td,
-.subtask-table-responsive th,
-.subtask-table-responsive td {
-  padding: 0.5rem 0.75rem !important;
+@media (min-width: 769px) {
+  .worklog-table-responsive th,
+  .worklog-table-responsive td,
+  .billed-table-responsive th,
+  .billed-table-responsive td,
+  .subtask-table-responsive th,
+  .subtask-table-responsive td {
+    padding: 0.5rem 0.75rem !important;
+  }
 }
 
 .saas-tab {
